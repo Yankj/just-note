@@ -1,0 +1,153 @@
+{
+  "version": 1,
+  "skills": {
+    "self-improving-agent": {
+      "version": "3.0.4",
+      "installedAt": 1773643085043
+    },
+    "self-improving": {
+      "version": "1.2.16",
+      "installedAt": 1773643085866
+    },
+    "clawdhub": {
+      "version": "1.0.0",
+      "installedAt": 1773643143239
+    },
+    "moltguard": {
+      "version": "6.8.16",
+      "installedAt": 1773643144181
+    },
+    "web-search-exa": {
+      "version": "2.0.0",
+      "installedAt": 1773643144609
+    },
+    "nano-banana-pro": {
+      "version": "1.0.1",
+      "installedAt": 1773643383710
+    },
+    "api-gateway": {
+      "version": "1.0.69",
+      "installedAt": 1773643511655
+    },
+    "baidu-search": {
+      "version": "1.1.2",
+      "installedAt": 1773643561832
+    },
+    "skill-creator-2": {
+      "version": "0.1.0",
+      "installedAt": 1773647222212
+    },
+    "self-evolving-skill": {
+      "version": "1.0.2",
+      "installedAt": 1773647282683
+    },
+    "bili-summary": {
+      "version": "1.0.0",
+      "installedAt": 1773649381840
+    },
+    "xhcj-finance": {
+      "version": "1.0.8",
+      "installedAt": 1773649442332
+    },
+    "finance-news-pro": {
+      "version": "1.0.1",
+      "installedAt": 1773649502707
+    },
+    "lof-monitor": {
+      "version": "1.0.1",
+      "installedAt": 1773650641341
+    },
+    "agent-team-orchestration": {
+      "version": "1.0.0",
+      "installedAt": 1773654661448
+    },
+    "stock-research-engine": {
+      "version": "3.0.0",
+      "installedAt": 1773667381601
+    },
+    "akshare-stock": {
+      "version": "1.0.1",
+      "installedAt": 1773667381605
+    },
+    "stock-watcher": {
+      "version": "1.0.0",
+      "installedAt": 1773669482006
+    },
+    "skill-creator": {
+      "version": "0.1.0",
+      "installedAt": 1774527853337
+    },
+    "openclaw-migrate-v3": {
+      "version": "3.0.0",
+      "installedAt": 1774603436157
+    },
+    "openclaw-migrate-v2": {
+      "version": "1.0.0",
+      "installedAt": 1774603438561
+    },
+    "competitor-analyzer": {
+      "version": "1.0.0",
+      "installedAt": 1774631064603
+    },
+    "ui-ux-pro-max": {
+      "version": "0.1.0",
+      "installedAt": 1774631085180
+    },
+    "ui-audit": {
+      "version": "1.0.1",
+      "installedAt": 1774631089495
+    },
+    "ui-ux-design": {
+      "version": "1.0.0",
+      "installedAt": 1774631094540
+    },
+    "react-expert": {
+      "version": "0.1.0",
+      "installedAt": 1774631103650
+    },
+    "vue-expert": {
+      "version": "0.1.0",
+      "installedAt": 1774631107136
+    },
+    "nextjs-expert": {
+      "version": "1.0.0",
+      "installedAt": 1774631109934
+    },
+    "frontend-performance": {
+      "version": "1.0.0",
+      "installedAt": 1774631114349
+    },
+    "full-stack-developer": {
+      "version": "1.0.0",
+      "installedAt": 1774631141371
+    },
+    "linear": {
+      "version": "1.0.0",
+      "installedAt": 1774631151295
+    },
+    "vercel": {
+      "version": "1.0.1",
+      "installedAt": 1774631155510
+    },
+    "playwright-mcp": {
+      "version": "1.0.0",
+      "installedAt": 1774631159311
+    },
+    "composio": {
+      "version": "1.0.0",
+      "installedAt": 1774631165050
+    },
+    "github-integration": {
+      "version": "1.0.0",
+      "installedAt": 1774631167358
+    },
+    "clawflows": {
+      "version": "1.0.0",
+      "installedAt": 1774631169546
+    },
+    "coolify": {
+      "version": "2.1.1",
+      "installedAt": 1774631172090
+    }
+  }
+}

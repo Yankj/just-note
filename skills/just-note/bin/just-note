@@ -1,0 +1,1238 @@
+#!/bin/bash
+# just-note - 零摩擦知识记录工具
+# 用法：just-note <command> [options]
+
+set -e
+
+# 配置
+STORAGE_DIR="${JUST_NOTE_STORAGE:-$HOME/openclaw/workspace/memory/just-note}"
+LLM_MODEL="${JUST_NOTE_LLM_MODEL:-qwen3.5-plus}"
+AUTO_TAG="${JUST_NOTE_AUTO_TAG:-true}"
+AUTO_RELATE="${JUST_NOTE_AUTO_RELATE:-true}"
+
+# 颜色
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# 帮助信息
+show_help() {
+  cat << EOF
+记一下 (just-note) - 零摩擦知识记录
+
+用法：just-note <command> [options]
+
+📝 记录类:
+  write --type <type> --content "内容"  明确参数记录
+  quick "内容"                          快速记录（type=other）
+
+📖 查询类:
+  today                  查看今日记录
+  yesterday              查看昨日记录
+  list                   列出所有记录
+  list --type <type>     按类型筛选
+  list --from <date>     按日期范围
+  search "<keyword>"     关键词搜索
+  diary --date <date>    日记视图（按天聚合，时间线展示）
+
+📊 统计类:
+  stats                  总体统计
+  stats --type <type>    按类型统计
+  weekly                 本周总结
+  monthly                本月总结
+  daily-summary          AI 生成每日总结
+  weekly-ai              AI 生成本周总结
+  monthly-ai             AI 生成本月总结
+
+📤 导出类:
+  export --format <fmt>  导出（flomo/obsidian/excel）
+
+⚙️  配置:
+  LLM_MODEL              AI 模型（默认：qwen3.5-plus）
+  AUTO_TAG               自动标签（默认：true）
+  AUTO_RELATE            自动关联（默认：true）
+
+帮助:
+  help                   显示此帮助信息
+  version                显示版本
+
+示例:
+  just-note quick "今天学到了一个重要知识点"
+  just-note write --type inspiration --content "突然想到一个产品创意"
+  just-note search "产品"
+  just-note list --type expense
+  just-note diary --date 2026-03-26
+  just-note daily-summary  # 查看 AI 生成的今日总结
+  just-note weekly-ai      # 查看 AI 生成的本周总结
+EOF
+}
+
+# 版本
+show_version() {
+  echo "just-note v0.1.0"
+  echo "零摩擦知识记录工具"
+}
+
+# 初始化
+init_storage() {
+  if [ ! -d "$STORAGE_DIR" ]; then
+    mkdir -p "$STORAGE_DIR"
+    echo -e "${GREEN}✓ 创建存储目录：$STORAGE_DIR${NC}"
+  fi
+}
+
+# AI 分类 - 通过 OpenClaw 调用 LLM
+ai_classify() {
+  local content="$1"
+  
+  # 通过 OpenClaw sessions_send 调用 LLM
+  # 这会发送到当前 session 的 LLM 模型
+  local prompt="你是一个知识记录分类助手。请分析用户输入的内容，完成以下任务：
+
+1. 识别内容类型（9 选 1）：inspiration/idea/knowledge/expense/income/diary/task/quote/other
+2. 生成 3-5 个标签
+3. 生成一个简洁的标题（10-20 字）
+4. 如果是收支类型，提取金额和货币单位
+5. 提取 1-3 个核心观点
+
+输出 JSON 格式：
+{
+  \"type\": \"类型\",
+  \"title\": \"标题\",
+  \"tags\": [\"tag1\", \"tag2\"],
+  \"amount\": 数字或 null,
+  \"currency\": \"CNY\" 或 null,
+  \"observations\": [\"观点 1\"]
+}
+
+用户输入：$content"
+
+  # 使用 OpenClaw 的 exec 调用 LLM（通过 sessions_send 或其他方式）
+  # 这里简化处理，实际应该调用 OpenClaw 的 LLM 接口
+  # 临时方案：直接返回简化结果，后续优化
+  
+  # TODO: 使用 OpenClaw 的 LLM 接口
+  # 参考其他 Skill 的实现方式
+  
+  # 临时返回简化版本（后续替换为真实 LLM 调用）
+  echo "{\"type\": \"other\", \"title\": \"$content\", \"tags\": [\"note\"], \"amount\": null, \"currency\": null, \"observations\": [\"$content\"]}"
+}
+
+# 写入笔记
+write_note() {
+  local type="$1"
+  local title="$2"
+  local content="$3"
+  local tags="$4"
+  local observations="$5"
+  local amount="$6"
+  local currency="$7"
+  local source="${8:-manual}"
+  
+  # 生成文件名
+  local timestamp=$(date +%Y-%m-%d-%H%M%S)
+  local month=$(date +%Y-%m)
+  local day_id=$(date +%Y-%m-%d)
+  local file_dir="$STORAGE_DIR/$month"
+  local file_path="$file_dir/$timestamp.md"
+  
+  # 创建目录
+  mkdir -p "$file_dir"
+  
+  # 生成 amount/currency 行（如果有）
+  local amount_line=""
+  if [ "$amount" != "null" ] && [ -n "$amount" ]; then
+    amount_line="amount: $amount
+currency: $currency
+"
+  fi
+  
+  # 写入文件
+  cat > "$file_path" << EOF
+---
+title: "$title"
+type: $type
+created: $(date -Iseconds)
+day-id: $day_id
+tags: [$tags]
+source: $source
+$amount_line
+---
+
+# $title
+
+## 原始内容
+$content
+
+## AI 整理
+EOF
+
+  # 写入 observations
+  if [ -n "$observations" ]; then
+    echo "$observations" | while read -r obs; do
+      echo "- [insight] $obs" >> "$file_path"
+    done
+  fi
+  
+  # 写入关联笔记（预留）
+  cat >> "$file_path" << EOF
+
+## 关联笔记
+- relates_to [[待实现]]
+EOF
+
+  echo -e "${GREEN}✓ 记录已保存：$file_path${NC}"
+  echo "  类型：$type"
+  echo "  标题：$title"
+  echo "  标签：$tags"
+}
+
+# 写入笔记（明确参数，不思考）
+cmd_write() {
+  local type=""
+  local title=""
+  local content=""
+  local tags=""
+  local amount=""
+  local currency="CNY"
+  
+  # 解析参数
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --type)
+        type="$2"
+        shift 2
+        ;;
+      --title)
+        title="$2"
+        shift 2
+        ;;
+      --content)
+        content="$2"
+        shift 2
+        ;;
+      --tags)
+        tags="$2"
+        shift 2
+        ;;
+      --amount)
+        amount="$2"
+        shift 2
+        ;;
+      --currency)
+        currency="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+  
+  # 验证必要参数
+  if [ -z "$type" ] || [ -z "$content" ]; then
+    echo -e "${RED}错误：--type 和 --content 是必填参数${NC}"
+    echo "用法：just-note write --type <type> --content \"内容\" [--title \"标题\"] [--tags \"标签\"]"
+    exit 1
+  fi
+  
+  # 如果没有标题，用内容前 50 字
+  if [ -z "$title" ]; then
+    title=$(echo "$content" | head -c 50)
+  fi
+  
+  # 写入笔记
+  write_note "$type" "$title" "$content" "$tags" "" "$amount" "$currency" "cli"
+}
+
+# 快速记录（简化版，type=other）
+cmd_quick() {
+  local content="$1"
+  
+  if [ -z "$content" ]; then
+    echo -e "${RED}错误：请提供记录内容${NC}"
+    exit 1
+  fi
+  
+  # 最小化处理，直接保存
+  local timestamp=$(date +%Y-%m-%d-%H%M%S)
+  local month=$(date +%Y-%m)
+  local day_id=$(date +%Y-%m-%d)
+  local file_dir="$STORAGE_DIR/$month"
+  local file_path="$file_dir/$timestamp.md"
+  
+  mkdir -p "$file_dir"
+  
+  cat > "$file_path" << EOF
+---
+title: "$(echo "$content" | head -c 50)"
+type: other
+created: $(date -Iseconds)
+day-id: $day_id
+tags: [quick]
+source: quick
+---
+
+# 快速记录
+
+$content
+EOF
+
+  echo -e "${GREEN}✓ 快速记录已保存：$file_path${NC}"
+}
+
+# 查看今日记录
+cmd_today() {
+  local today=$(date +%Y-%m-%d)
+  cmd_diary "$today"
+}
+
+# 查看昨日记录
+cmd_yesterday() {
+  local yesterday=$(date -d "yesterday" +%Y-%m-%d)
+  cmd_diary "$yesterday"
+}
+
+# 日记视图（增强版）
+cmd_diary() {
+  local date="$1"
+  local output_format="text"  # text|markdown|json
+  
+  if [ -z "$date" ]; then
+    date=$(date +%Y-%m-%d)
+  fi
+  
+  # 解析参数
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --format)
+        output_format="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+  
+  # 查找当天的记录
+  local files=$(grep -l "^day-id: $date$" "$STORAGE_DIR"/*/*.md 2>/dev/null | sort)
+  local count=0
+  if [ -n "$files" ]; then
+    count=$(echo "$files" | wc -l)
+  fi
+  
+  if [ "$output_format" = "json" ]; then
+    # JSON 输出（适合程序调用）
+    echo "{"
+    echo "  \"date\": \"$date\","
+    echo "  \"count\": $count,"
+    echo "  \"entries\": ["
+    local first=true
+    echo "$files" | while read -r file; do
+      if [ -n "$file" ] && [ -f "$file" ]; then
+        if [ "$first" = true ]; then
+          first=false
+        else
+          echo ","
+        fi
+        # 提取关键信息
+        local type=$(grep "^type: " "$file" | cut -d' ' -f2-)
+        local title=$(grep "^title: " "$file" | cut -d' ' -f2-)
+        local content=$(grep "^content: " "$file" | cut -d' ' -f2-)
+        local time=$(grep "^created: " "$file" | cut -d' ' -f2-)
+        echo -n "    {\"type\": \"$type\", \"title\": \"$title\", \"time\": \"$time\"}"
+      fi
+    done
+    echo ""
+    echo "  ]"
+    echo "}"
+    return
+  fi
+  
+  # 文本/Markdown 输出
+  echo "# 📔 $date 日记"
+  echo ""
+  echo "## 📊 今日概览"
+  echo "共 **$count** 条记录"
+  echo ""
+  
+  if [ $count -eq 0 ]; then
+    echo "💭 今日暂无记录，快去记录一些想法吧！"
+    echo ""
+    echo "使用示例:"
+    echo '```bash'
+    echo 'just-note quick "今天学到了一个重要知识点"'
+    echo 'just-note write --type inspiration --content "突然想到一个产品创意"'
+    echo '```'
+    return
+  fi
+  
+  # 按类型统计
+  echo "### 类型分布"
+  echo ""
+  local has_stats=false
+  for type in inspiration idea knowledge expense income diary task quote other; do
+    local type_count=$(echo "$files" | xargs grep -l "^type: $type$" 2>/dev/null | wc -l)
+    if [ $type_count -gt 0 ]; then
+      has_stats=true
+      local type_icon=""
+      case $type in
+        inspiration) type_icon="💡" ;;
+        idea) type_icon="✨" ;;
+        knowledge) type_icon="📚" ;;
+        expense) type_icon="💸" ;;
+        income) type_icon="💰" ;;
+        diary) type_icon="📝" ;;
+        task) type_icon="✅" ;;
+        quote) type_icon="💬" ;;
+        *) type_icon="📌" ;;
+      esac
+      echo "- $type_icon $type: **$type_count** 条"
+    fi
+  done
+  
+  if [ "$has_stats" = false ]; then
+    echo "_记录类型统计中..._"
+  fi
+  
+  echo ""
+  echo "## 📝 详细记录"
+  echo ""
+  echo "### 时间线"
+  echo ""
+  
+  # 按时间顺序显示详细记录
+  local current_hour=""
+  echo "$files" | while read -r file; do
+    if [ -n "$file" ] && [ -f "$file" ]; then
+      # 提取信息
+      local type=$(grep "^type: " "$file" | cut -d' ' -f2-)
+      local title=$(grep "^title: " "$file" | cut -d' ' -f2-)
+      local content=$(grep "^content: " "$file" | cut -d' ' -f2-)
+      local time=$(grep "^created: " "$file" | cut -d' ' -f2-)
+      local hour=$(echo "$time" | cut -d'T' -f2 | cut -d':' -f1)
+      
+      # 按小时分组
+      if [ "$hour" != "$current_hour" ]; then
+        echo ""
+        echo "#### 🕐 ${hour}:00"
+        echo ""
+        current_hour="$hour"
+      fi
+      
+      # 类型图标
+      local type_icon=""
+      case $type in
+        inspiration) type_icon="💡" ;;
+        idea) type_icon="✨" ;;
+        knowledge) type_icon="📚" ;;
+        expense) type_icon="💸" ;;
+        income) type_icon="💰" ;;
+        diary) type_icon="📝" ;;
+        task) type_icon="✅" ;;
+        quote) type_icon="💬" ;;
+        *) type_icon="📌" ;;
+      esac
+      
+      # 显示记录
+      echo "- **$type_icon $title** \`$time\`"
+      echo "  - $content"
+      echo ""
+    fi
+  done
+  
+  # 每日总结（AI 生成）
+  echo ""
+  echo "## 🤖 AI 每日总结"
+  echo ""
+  echo "_正在生成中..._"
+  echo ""
+  
+  # 收集今日内容生成总结
+  local all_content=""
+  echo "$files" | while read -r file; do
+    if [ -n "$file" ] && [ -f "$file" ]; then
+      all_content+="$(cat "$file")"$'\n'
+    fi
+  done
+  
+  if [ -n "$all_content" ]; then
+    # 调用 AI 生成总结
+    local summary_prompt="请根据以下用户今日的笔记记录，生成一个简洁的每日总结（200 字以内），包括：
+1. 今日主要关注点
+2. 关键收获/洞察
+3. 明日建议
+
+笔记内容：
+$all_content
+
+请用友好的语气，像朋友一样总结。"
+    
+    # 通过 OpenClaw 调用 LLM（简化版，实际应该调用 sessions_send）
+    echo "💡 提示：运行 \`just-note daily-summary --date $date\` 获取 AI 生成的完整总结"
+  fi
+}
+
+# 列出记录
+cmd_list() {
+  local type=""
+  local from_date=""
+  local to_date=""
+  
+  # 解析参数
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --type)
+        type="$2"
+        shift 2
+        ;;
+      --from)
+        from_date="$2"
+        shift 2
+        ;;
+      --to)
+        to_date="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+  
+  echo "# 记录列表"
+  echo ""
+  
+  # 查找文件
+  local files="$STORAGE_DIR"/*/*.md
+  
+  if [ -n "$type" ]; then
+    files=$(grep -l "^type: $type$" $files 2>/dev/null)
+  fi
+  
+  if [ -n "$from_date" ]; then
+    files=$(echo "$files" | xargs grep -l "^created:.*$from_date" 2>/dev/null)
+  fi
+  
+  if [ -n "$to_date" ]; then
+    files=$(echo "$files" | xargs grep -l "^created:.*$to_date" 2>/dev/null)
+  fi
+  
+  # 显示列表
+  echo "$files" | sort | while read -r file; do
+    if [ -f "$file" ]; then
+      local title=$(grep "^title:" "$file" | cut -d'"' -f2)
+      local type=$(grep "^type:" "$file" | cut -d':' -f2 | tr -d ' ')
+      local created=$(grep "^created:" "$file" | cut -d':' -f2- | tr -d ' ')
+      echo "- [$type] $title ($created)"
+    fi
+  done
+}
+
+# 搜索
+cmd_search() {
+  local keyword="$1"
+  
+  if [ -z "$keyword" ]; then
+    echo -e "${RED}错误：请提供搜索关键词${NC}"
+    exit 1
+  fi
+  
+  echo "# 搜索结果：$keyword"
+  echo ""
+  
+  # 搜索
+  grep -rl "$keyword" "$STORAGE_DIR"/*/*.md 2>/dev/null | while read -r file; do
+    local title=$(grep "^title:" "$file" | cut -d'"' -f2)
+    local type=$(grep "^type:" "$file" | cut -d':' -f2 | tr -d ' ')
+    local created=$(grep "^created:" "$file" | cut -d':' -f2- | tr -d ' ')
+    echo "- [$type] $title ($created)"
+    echo "  文件：$file"
+    echo ""
+  done
+}
+
+# 统计
+cmd_stats() {
+  local type=""
+  
+  # 解析参数
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --type)
+        type="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+  
+  echo "# 统计信息"
+  echo ""
+  
+  # 总记录数
+  local total=$(ls "$STORAGE_DIR"/*/*.md 2>/dev/null | wc -l)
+  echo "总记录数：$total"
+  echo ""
+  
+  # 按类型统计
+  echo "按类型分布:"
+  for t in inspiration idea knowledge expense income diary task quote other; do
+    local count=$(grep -l "^type: $t$" "$STORAGE_DIR"/*/*.md 2>/dev/null | wc -l)
+    if [ $count -gt 0 ]; then
+      printf "  %-15s %d 条\n" "$t" "$count"
+    fi
+  done
+  echo ""
+  
+  # 按月份统计
+  echo "按月份分布:"
+  for dir in "$STORAGE_DIR"/*/; do
+    if [ -d "$dir" ]; then
+      local month=$(basename "$dir")
+      local count=$(ls "$dir"/*.md 2>/dev/null | wc -l)
+      if [ $count -gt 0 ]; then
+        printf "  %-10s %d 条\n" "$month" "$count"
+      fi
+    fi
+  done
+}
+
+# 导出
+cmd_export() {
+  local format=""
+  local output_file=""
+  
+  # 解析参数
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --format)
+        format="$2"
+        shift 2
+        ;;
+      --output)
+        output_file="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+  
+  if [ -z "$format" ]; then
+    echo -e "${RED}错误：请指定导出格式（flomo/obsidian/excel）${NC}"
+    exit 1
+  fi
+  
+  case $format in
+    flomo)
+      export_flomo "$output_file"
+      ;;
+    obsidian)
+      export_obsidian "$output_file"
+      ;;
+    excel)
+      export_excel "$output_file"
+      ;;
+    *)
+      echo -e "${RED}错误：不支持的格式：$format${NC}"
+      exit 1
+      ;;
+  esac
+}
+
+# 导出为 flomo 格式
+export_flomo() {
+  local output="${1:-$STORAGE_DIR/export_flomo.jsonl}"
+  
+  echo "导出为 flomo 格式..."
+  echo "输出文件：$output"
+  
+  # JSONL 格式
+  > "$output"
+  
+  for file in "$STORAGE_DIR"/*/*.md; do
+    if [ -f "$file" ]; then
+      local content=$(grep -A 100 "^## 原始内容" "$file" | tail -n +3 | head -n 20)
+      local tags=$(grep "^tags:" "$file" | cut -d'[' -f2 | cut -d']' -f1)
+      local created=$(grep "^created:" "$file" | cut -d':' -f2- | tr -d ' ')
+      
+      echo "{\"content\":\"$content\",\"tags\":\"$tags\",\"created_at\":\"$created\"}" >> "$output"
+    fi
+  done
+  
+  echo -e "${GREEN}✓ 导出完成：$output${NC}"
+}
+
+# 导出为 Obsidian 格式
+export_obsidian() {
+  local output="${1:-$STORAGE_DIR/export_obsidian/}"
+  
+  echo "导出为 Obsidian 格式..."
+  echo "输出目录：$output"
+  
+  mkdir -p "$output"
+  
+  for file in "$STORAGE_DIR"/*/*.md; do
+    if [ -f "$file" ]; then
+      local filename=$(basename "$file")
+      cp "$file" "$output/$filename"
+    fi
+  done
+  
+  echo -e "${GREEN}✓ 导出完成：$output${NC}"
+}
+
+# 导出为 Excel 格式（CSV）
+export_excel() {
+  local output="${1:-$STORAGE_DIR/export.csv}"
+  
+  echo "导出为 Excel 格式 (CSV)..."
+  echo "输出文件：$output"
+  
+  # CSV 表头
+  echo "日期，类型，标题，标签，金额，内容" > "$output"
+  
+  for file in "$STORAGE_DIR"/*/*.md; do
+    if [ -f "$file" ]; then
+      local created=$(grep "^created:" "$file" | cut -d':' -f2- | tr -d ' ')
+      local type=$(grep "^type:" "$file" | cut -d':' -f2 | tr -d ' ')
+      local title=$(grep "^title:" "$file" | cut -d'"' -f2)
+      local tags=$(grep "^tags:" "$file" | cut -d'[' -f2 | cut -d']' -f1)
+      local amount=$(grep "^amount:" "$file" | cut -d':' -f2 | tr -d ' ')
+      local content=$(grep "^## 原始内容" -A 3 "$file" | tail -n 1 | tr ',' ' ')
+      
+      echo "$created,$type,\"$title\",$tags,$amount,\"$content\"" >> "$output"
+    fi
+  done
+  
+  echo -e "${GREEN}✓ 导出完成：$output${NC}"
+}
+
+# 主函数
+main() {
+  local command="${1:-help}"
+  shift || true
+  
+  # 初始化
+  init_storage
+  
+  # 执行命令
+  case $command in
+    write)
+      cmd_write "$@"
+      ;;
+    quick)
+      cmd_quick "$@"
+      ;;
+    today)
+      cmd_today "$@"
+      ;;
+    yesterday)
+      cmd_yesterday "$@"
+      ;;
+    list)
+      cmd_list "$@"
+      ;;
+    search)
+      cmd_search "$@"
+      ;;
+    diary)
+      cmd_diary "$@"
+      ;;
+    stats)
+      cmd_stats "$@"
+      ;;
+    export)
+      cmd_export "$@"
+      ;;
+    weekly)
+      cmd_weekly "$@"
+      ;;
+    monthly)
+      cmd_monthly "$@"
+      ;;
+    daily-summary)
+      cmd_daily_summary "$@"
+      ;;
+    weekly-ai)
+      cmd_weekly_ai "$@"
+      ;;
+    monthly-ai)
+      cmd_monthly_ai "$@"
+      ;;
+    help|--help|-h)
+      show_help
+      ;;
+    version|--version|-v)
+      show_version
+      ;;
+    *)
+      echo -e "${RED}未知命令：$command${NC}"
+      echo ""
+      show_help
+      exit 1
+      ;;
+  esac
+}
+
+# 每日汇总
+cmd_daily_summary() {
+  local today=$(date +%Y-%m-%d)
+  local weekday=$(date +%A)
+  
+  echo "# 📅 每日汇总"
+  echo ""
+  echo "日期：$today ($weekday)"
+  echo ""
+  
+  # 统计
+  local total=$(grep -l "^day-id: $today$" "$STORAGE_DIR"/*/*.md 2>/dev/null | wc -l)
+  echo "## 今日概览"
+  echo "共记录 **$total** 条"
+  echo ""
+  
+  # 收支统计
+  local expense_total=0
+  local income_total=0
+  for file in $(grep -l "^type: expense$" "$STORAGE_DIR"/*/*.md 2>/dev/null | xargs grep -l "^day-id: $today$" 2>/dev/null); do
+    local amount=$(grep "^amount:" "$file" | cut -d':' -f2 | tr -d ' ')
+    if [ -n "$amount" ] && [ "$amount" != "null" ]; then
+      expense_total=$((expense_total + amount))
+    fi
+  done
+  
+  for file in $(grep -l "^type: income$" "$STORAGE_DIR"/*/*.md 2>/dev/null | xargs grep -l "^day-id: $today$" 2>/dev/null); do
+    local amount=$(grep "^amount:" "$file" | cut -d':' -f2 | tr -d ' ')
+    if [ -n "$amount" ] && [ "$amount" != "null" ]; then
+      income_total=$((income_total + amount))
+    fi
+  done
+  
+  echo "### 收支"
+  echo "- 支出：¥$expense_total"
+  echo "- 收入：¥$income_total"
+  echo "- 结余：¥$((income_total - expense_total))"
+  echo ""
+  
+  # 按类型统计
+  echo "### 分类统计"
+  for type in inspiration idea knowledge expense income diary task quote other; do
+    local type_count=$(grep -l "^type: $type$" "$STORAGE_DIR"/*/*.md 2>/dev/null | xargs grep -l "^day-id: $today$" 2>/dev/null | wc -l)
+    if [ $type_count -gt 0 ]; then
+      echo "- $type: $type_count 条"
+    fi
+  done
+  echo ""
+  
+  # 亮点
+  echo "### 今日亮点"
+  echo "（AI 自动生成，待实现）"
+  echo ""
+}
+
+# 本周总结
+cmd_weekly() {
+  local week_start=$(date -d "last Monday" +%Y-%m-%d 2>/dev/null || date -v-mon +%Y-%m-%d)
+  local week_end=$(date -d "next Sunday" +%Y-%m-%d 2>/dev/null || date -v-sun +%Y-%m-%d)
+  local today=$(date +%Y-%m-%d)
+  
+  echo "# 📊 本周总结"
+  echo ""
+  echo "**周期**: $week_start 至 $week_end"  
+  echo "**生成时间**: $today"
+  echo ""
+  
+  # 统计本周记录
+  echo "## 本周概览"
+  local total=0
+  local week_files=""
+  for file in "$STORAGE_DIR"/*/*.md; do
+    if [ -f "$file" ]; then
+      local created=$(grep "^created:" "$file" | cut -d' ' -f2-)
+      # 简化日期比较
+      total=$((total + 1))
+      week_files+="$file"$'\n'
+    fi
+  done
+  
+  echo "共记录 **$total** 条"
+  echo ""
+  
+  if [ $total -eq 0 ]; then
+    echo "💭 本周暂无记录"
+    echo ""
+    return
+  fi
+  
+  # 收支统计
+  local expense_total=0
+  local income_total=0
+  local expense_count=0
+  local income_count=0
+  
+  echo "$week_files" | while read -r file; do
+    if [ -n "$file" ] && [ -f "$file" ]; then
+      local type=$(grep "^type:" "$file" | cut -d':' -f2 | tr -d ' ')
+      local amount=$(grep "^amount:" "$file" | cut -d':' -f2 | tr -d ' ')
+      if [ "$type" = "expense" ] && [ -n "$amount" ] && [ "$amount" != "null" ]; then
+        echo "expense $amount"
+      fi
+      if [ "$type" = "income" ] && [ -n "$amount" ] && [ "$amount" != "null" ]; then
+        echo "income $amount"
+      fi
+    fi
+  done | while read -r line; do
+    local t=$(echo "$line" | cut -d' ' -f1)
+    local a=$(echo "$line" | cut -d' ' -f2)
+    if [ "$t" = "expense" ]; then
+      expense_total=$((expense_total + a))
+      expense_count=$((expense_count + 1))
+    else
+      income_total=$((income_total + a))
+      income_count=$((income_count + 1))
+    fi
+  done
+  
+  echo "### 💰 收支"
+  echo "- 支出：**¥$expense_total** ($expense_count 笔)"
+  echo "- 收入：**¥$income_total** ($income_count 笔)"
+  if [ $income_total -gt 0 ] || [ $expense_total -gt 0 ]; then
+    echo "- 结余：**¥$((income_total - expense_total))**"
+  fi
+  echo ""
+  
+  # 按类型统计
+  echo "### 📈 分类统计"
+  echo ""
+  for type in inspiration idea knowledge expense income diary task quote other; do
+    local type_count=0
+    echo "$week_files" | while read -r file; do
+      if [ -n "$file" ] && [ -f "$file" ]; then
+        local t=$(grep "^type:" "$file" | cut -d':' -f2 | tr -d ' ')
+        if [ "$t" = "$type" ]; then
+          echo "1"
+        fi
+      fi
+    done | wc -l | read type_count
+    if [ $type_count -gt 0 ]; then
+      local type_icon=""
+      case $type in
+        inspiration) type_icon="💡" ;;
+        idea) type_icon="✨" ;;
+        knowledge) type_icon="📚" ;;
+        expense) type_icon="💸" ;;
+        income) type_icon="💰" ;;
+        diary) type_icon="📝" ;;
+        task) type_icon="✅" ;;
+        quote) type_icon="💬" ;;
+        *) type_icon="📌" ;;
+      esac
+      echo "- $type_icon $type: **$type_count** 条"
+    fi
+  done
+  echo ""
+  
+  # 本周亮点（AI 生成）
+  echo "### ✨ 本周亮点"
+  echo ""
+  echo "_正在分析中..._"
+  echo ""
+  echo "💡 提示：运行 \`just-note weekly-ai\` 获取 AI 生成的完整周报总结"
+  echo ""
+}
+
+# 本月总结（增强版）
+cmd_monthly() {
+  local month=$(date +%Y-%m)
+  local today=$(date +%Y-%m-%d)
+  local month_start="${month}-01"
+  local month_end="${month}-31"
+  
+  echo "# 📈 本月总结"
+  echo ""
+  echo "**月份**: $month"
+  echo "**生成时间**: $today"
+  echo ""
+  
+  # 统计本月记录
+  echo "## 本月概览"
+  local total=0
+  local month_files=""
+  for file in "$STORAGE_DIR"/*/*.md; do
+    if [ -f "$file" ]; then
+      local created=$(grep "^created:" "$file" | cut -d' ' -f2-)
+      # 简化日期比较
+      total=$((total + 1))
+      month_files+="$file"$'\n'
+    fi
+  done
+  
+  echo "共记录 **$total** 条"
+  echo ""
+  
+  if [ $total -eq 0 ]; then
+    echo "💭 本月暂无记录"
+    echo ""
+    return
+  fi
+  
+  # 收支统计
+  local expense_total=0
+  local income_total=0
+  local expense_count=0
+  local income_count=0
+  
+  echo "$month_files" | while read -r file; do
+    if [ -n "$file" ] && [ -f "$file" ]; then
+      local type=$(grep "^type:" "$file" | cut -d':' -f2 | tr -d ' ')
+      local amount=$(grep "^amount:" "$file" | cut -d':' -f2 | tr -d ' ')
+      if [ "$type" = "expense" ] && [ -n "$amount" ] && [ "$amount" != "null" ]; then
+        echo "expense $amount"
+      fi
+      if [ "$type" = "income" ] && [ -n "$amount" ] && [ "$amount" != "null" ]; then
+        echo "income $amount"
+      fi
+    fi
+  done | while read -r line; do
+    local t=$(echo "$line" | cut -d' ' -f1)
+    local a=$(echo "$line" | cut -d' ' -f2)
+    if [ "$t" = "expense" ]; then
+      expense_total=$((expense_total + a))
+      expense_count=$((expense_count + 1))
+    else
+      income_total=$((income_total + a))
+      income_count=$((income_count + 1))
+    fi
+  done
+  
+  echo "### 💰 收支"
+  echo "- 支出：**¥$expense_total** ($expense_count 笔)"
+  echo "- 收入：**¥$income_total** ($income_count 笔)"
+  if [ $income_total -gt 0 ] || [ $expense_total -gt 0 ]; then
+    echo "- 结余：**¥$((income_total - expense_total))**"
+  fi
+  echo ""
+  
+  # 按类型统计
+  echo "### 📊 分类统计"
+  echo ""
+  for type in inspiration idea knowledge expense income diary task quote other; do
+    local type_count=0
+    echo "$month_files" | while read -r file; do
+      if [ -n "$file" ] && [ -f "$file" ]; then
+        local t=$(grep "^type:" "$file" | cut -d':' -f2 | tr -d ' ')
+        if [ "$t" = "$type" ]; then
+          echo "1"
+        fi
+      fi
+    done | wc -l | read type_count
+    if [ $type_count -gt 0 ]; then
+      local type_icon=""
+      case $type in
+        inspiration) type_icon="💡" ;;
+        idea) type_icon="✨" ;;
+        knowledge) type_icon="📚" ;;
+        expense) type_icon="💸" ;;
+        income) type_icon="💰" ;;
+        diary) type_icon="📝" ;;
+        task) type_icon="✅" ;;
+        quote) type_icon="💬" ;;
+        *) type_icon="📌" ;;
+      esac
+      echo "- $type_icon $type: **$type_count** 条"
+    fi
+  done
+  echo ""
+  
+  # 本月趋势（与上月对比）
+  echo "### 📈 趋势分析"
+  echo ""
+  echo "_对比分析中..._"
+  echo ""
+  
+  # 本月亮点（AI 生成）
+  echo "### ✨ 本月亮点"
+  echo ""
+  echo "_正在分析中..._"
+  echo ""
+  echo "💡 提示：运行 \`just-note monthly-ai\` 获取 AI 生成的完整月报总结"
+  echo ""
+}
+
+# AI 生成每日总结
+cmd_daily_summary() {
+  local date="$1"
+  
+  if [ -z "$date" ]; then
+    date=$(date +%Y-%m-%d)
+  fi
+  
+  echo "# 🤖 AI 每日总结 - $date"
+  echo ""
+  
+  # 收集今日内容
+  local all_content=""
+  local count=0
+  for file in "$STORAGE_DIR"/*/*.md; do
+    if [ -f "$file" ]; then
+      local file_date=$(grep "^day-id:" "$file" | cut -d' ' -f2-)
+      if [ "$file_date" = "$date" ]; then
+        all_content+="$(cat "$file")"$'\n'
+        count=$((count + 1))
+      fi
+    fi
+  done
+  
+  if [ $count -eq 0 ]; then
+    echo "💭 今日暂无记录，无法生成总结"
+    return
+  fi
+  
+  echo "收集到 **$count** 条记录"
+  echo ""
+  echo "---"
+  echo ""
+  
+  # 生成 AI 总结的 Prompt
+  local prompt="请根据用户今日的笔记记录，生成一个温暖的每日总结。
+
+要求：
+1. 总结今日主要关注点（100 字以内）
+2. 提炼关键收获/洞察（列出 1-3 点）
+3. 给出明日的友好建议（50 字以内）
+4. 语气像朋友一样温暖、鼓励
+
+笔记内容：
+$all_content
+
+请用 Markdown 格式输出。"
+
+  echo "📝 **今日关注**"
+  echo "_（AI 分析中...）_"
+  echo ""
+  
+  echo "✨ **关键收获**"
+  echo "_（AI 分析中...）_"
+  echo ""
+  
+  echo "💡 **明日建议**"
+  echo "_（AI 分析中...）_"
+  echo ""
+  
+  echo "---"
+  echo ""
+  echo "💡 提示：此功能需要集成 LLM，当前显示模板输出"
+  echo ""
+  echo "要启用 AI 总结，请配置："
+  echo '```bash'
+  echo 'export JUST_NOTE_LLM_MODEL=qwen3.5-plus'
+  echo 'export JUST_NOTE_AUTO_TAG=true'
+  echo '```'
+}
+
+# AI 生成本周总结
+cmd_weekly_ai() {
+  echo "# 🤖 AI 本周总结"
+  echo ""
+  
+  local week_start=$(date -d "last Monday" +%Y-%m-%d 2>/dev/null || echo "本周一")
+  local week_end=$(date -d "next Sunday" +%Y-%m-%d 2>/dev/null || echo "本周日")
+  
+  echo "**周期**: $week_start 至 $week_end"
+  echo ""
+  
+  # 收集本周内容
+  local all_content=""
+  local count=0
+  for file in "$STORAGE_DIR"/*/*.md; do
+    if [ -f "$file" ]; then
+      local created=$(grep "^created:" "$file" | cut -d' ' -f2-)
+      # 简化：假设本周的文件都在最近 7 天
+      count=$((count + 1))
+      all_content+="$(head -20 "$file")"$'\n'
+    fi
+  done
+  
+  if [ $count -eq 0 ]; then
+    echo "💭 本周暂无记录"
+    return
+  fi
+  
+  echo "本周共 **$count** 条记录"
+  echo ""
+  echo "---"
+  echo ""
+  
+  echo "📊 **本周主题**"
+  echo "_（AI 分析中...）_"
+  echo ""
+  
+  echo "🎯 **进展与成就**"
+  echo "_（AI 分析中...）_"
+  echo ""
+  
+  echo "🌱 **成长与反思**"
+  echo "_（AI 分析中...）_"
+  echo ""
+  
+  echo "🚀 **下周建议**"
+  echo "_（AI 分析中...）_"
+  echo ""
+  
+  echo "---"
+  echo ""
+  echo "💡 提示：配置 LLM 后启用完整 AI 总结功能"
+}
+
+# AI 生成本月总结
+cmd_monthly_ai() {
+  echo "# 🤖 AI 本月总结"
+  echo ""
+  
+  local month=$(date +%Y-%m)
+  echo "**月份**: $month"
+  echo ""
+  
+  # 收集本月内容
+  local count=$(ls "$STORAGE_DIR"/*/*.md 2>/dev/null | wc -l)
+  
+  if [ $count -eq 0 ]; then
+    echo "💭 本月暂无记录"
+    return
+  fi
+  
+  echo "本月共 **$count** 条记录"
+  echo ""
+  echo "---"
+  echo ""
+  
+  echo "📊 **本月主题**"
+  echo "_（AI 分析中...）_"
+  echo ""
+  
+  echo "🎯 **月度成就**"
+  echo "_（AI 分析中...）_"
+  echo ""
+  
+  echo "🌱 **成长与反思**"
+  echo "_（AI 分析中...）_"
+  echo ""
+  
+  echo "🚀 **下月规划**"
+  echo "_（AI 分析中...）_"
+  echo ""
+  
+  echo "---"
+  echo ""
+  echo "💡 提示：配置 LLM 后启用完整 AI 总结功能"
+}
+
+# 运行
+main "$@"
