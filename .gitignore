@@ -33,12 +33,8 @@ logs/
 .env
 .env.local
 .env.*.local
-
-# OpenClaw
-credentials/
 *.key
 *.pem
-openclaw.json
 
 # Build
 dist/
@@ -54,5 +50,15 @@ tmp/
 temp/
 .tmp/
 
-# just-note storage (optional - can be committed)
-# memory/just-note/
+# OpenClaw System (不要推送)
+.openclaw/
+skills/
+memory/
+agents/
+*.skill
+config/
+templates/
+reports/
+finance-app/
+credentials/
+openclaw.json
